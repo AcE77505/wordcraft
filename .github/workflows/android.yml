@@ -1,0 +1,87 @@
+name: Android arm64
+
+# Builds `wordcraft-cli` for Android (aarch64, bionic) with the NDK. The GUI app is not built:
+# eframe/wgpu/winit need a NativeActivity and an APK, which is a separate piece of work.
+#
+# The binary needs no desktop Linux filesystem layout: it keeps its cache, config, data, state,
+# temp and home folders in a `.wordcraft/` directory next to the binary, and reads fonts from
+# `/system/fonts` (see docs/android.md).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [android-build]
+    paths:
+      - .github/workflows/android.yml
+      - crates/android/**
+      - apps/wordcraft-cli/**
+      - crates/fonts/**
+      - Cargo.toml
+      - Cargo.lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # The minimum API level the binary runs on: 24 is where the bionic calls `std` uses are present
+  # on every device still in the wild.
+  ANDROID_API: "24"
+  TARGET: aarch64-linux-android
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+          components: rustfmt, clippy
+
+      - name: Install the NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+          add-to-path: true
+
+      - name: Install cargo-ndk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Cache the build
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: android-${{ env.ANDROID_API }}
+
+      - name: Build wordcraft-cli
+        run: cargo ndk --target arm64-v8a --platform "$ANDROID_API" build --release --locked -p wordcraft-cli
+
+      - name: Strip and inspect
+        run: |
+          set -euo pipefail
+          BIN="target/$TARGET/release/wordcraft-cli"
+          test -f "$BIN"
+          STRIP="${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          "$STRIP" --strip-all "$BIN"
+          ls -l "$BIN"
+          file "$BIN"
+          echo "--- dynamic dependencies (bionic only, never glibc) ---"
+          readelf -d "$BIN" | grep NEEDED || echo "none"
+          mkdir -p dist
+          cp "$BIN" "dist/wordcraft-cli-$TARGET"
+          ( cd dist && sha256sum "wordcraft-cli-$TARGET" > SHA256SUMS.txt && cat SHA256SUMS.txt )
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wordcraft-cli-${{ env.TARGET }}
+          path: dist/
+          if-no-files-found: error
