@@ -34,6 +34,7 @@ impl Class {
 /// prefix.
 pub const TABLE: &[(&str, Class)] = &[
     ("geom", Class::Layer(0)),
+    ("android", Class::Standalone),
     ("control-key", Class::Standalone),
     ("validate", Class::Standalone),
     ("doc", Class::Layer(1)),

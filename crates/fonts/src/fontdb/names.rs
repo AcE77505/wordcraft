@@ -293,6 +293,10 @@ pub fn system_font_dirs() -> Vec<std::path::PathBuf> {
         if let Some(l) = std::env::var_os("LOCALAPPDATA") {
             dirs.push(std::path::PathBuf::from(l).join("Microsoft\\Windows\\Fonts"));
         }
+    } else if cfg!(target_os = "android") {
+        // Android has no FHS: the platform's fonts live in /system/fonts, and the person's own
+        // fonts go in the portable folder next to the binary (the CLI has no settings dialog).
+        dirs.extend(wordcraft_android::system_font_dirs());
     } else {
         dirs.extend(["/usr/share/fonts", "/usr/local/share/fonts"].map(Into::into));
         if let Some(h) = &home {
