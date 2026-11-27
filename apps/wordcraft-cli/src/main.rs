@@ -204,7 +204,32 @@ fn session(doc: wordcraft_doc::Document) -> Session {
 
 /// The system region, read as the app reads it (locale variables, else the platform's locale).
 fn system_region() -> wordcraft_engine::Region {
-    wordcraft_engine::Region::from_locale_vars(|name| std::env::var(name).ok(), sys_locale::get_locale)
+    let android = wordcraft_android::is_android();
+    let android_locale = android.then(android_system_locale).flatten();
+    let platform_locale = if android { android_locale.clone() } else { sys_locale::get_locale() };
+    let mut region = wordcraft_engine::Region::from_locale_vars(|name| std::env::var(name).ok(), || platform_locale);
+    if android && locale_environment_is_unset() && android_locale.is_none() {
+        region.letter = Some(false);
+    }
+    region
+}
+
+/// Android's plain command-line environment has no locale files; `getprop` is its best-effort
+/// source when no locale variables are explicitly configured.
+fn android_system_locale() -> Option<String> {
+    if !locale_environment_is_unset() {
+        return None;
+    }
+    let output = std::process::Command::new("getprop").arg("persist.sys.locale").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let locale = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (!locale.is_empty()).then_some(locale)
+}
+
+fn locale_environment_is_unset() -> bool {
+    ["LC_ALL", "LANG", "LC_NUMERIC", "WORDCRAFT_REGION", "LC_PAPER"].iter().all(|name| std::env::var_os(name).is_none())
 }
 
 /// The body text for `text`: the plain-text export, so list items keep their bullet or number label.
@@ -1037,6 +1062,11 @@ fn launcher_profile_flag(args: &[OsString]) -> bool {
 }
 
 fn main() -> ExitCode {
+    if let Err(e) = wordcraft_android::prepare()
+        && wordcraft_android::is_android()
+    {
+        eprintln!("wordcraft-cli: Android portable environment setup failed: {e}; continuing with the existing environment");
+    }
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     if launcher_profile_flag(&args) {
         eprintln!("wordcraft-cli: --launch-profile and --profile-root are the desktop app's Nightly bootstrap, not a CLI option");

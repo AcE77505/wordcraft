@@ -9034,6 +9034,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "wordcraft-android"
+version = "0.18.1"
+
+[[package]]
 name = "wordcraft-cli"
 version = "0.18.1"
 dependencies = [
@@ -9041,6 +9045,7 @@ dependencies = [
  "image",
  "serde_json",
  "sys-locale",
+ "wordcraft-android",
  "wordcraft-doc",
  "wordcraft-engine",
  "wordcraft-fonts",
@@ -9152,6 +9157,7 @@ dependencies = [
  "skrifa 0.47.0",
  "unicode-bidi",
  "unicode-script",
+ "wordcraft-android",
  "wuff",
 ]
 
